@@ -14,11 +14,12 @@ class BERT_Embedding(nn.Module):
             bert_model_path = os.path.join(config['BERT'].get('bert_path'), 'model')
             self.bert_dim = int(config['BERT'].get('bert_dim'))
             self.trainable_layers = config['BERT'].get('trainable_layers')
-            self.bert = BertModel.from_pretrained(bert_model_path)
+            self.bert = BertModel.from_pretrained(bert_model_path, output_attentions=True,output_hidden_states=True)
         except Exception as e:
             print(e)
             print('load from web')
-            self.bert = BertModel.from_pretrained('bert-base-uncased')
+            #self.bert = BertModel.from_pretrained('bert-base-uncased', output_attentions=True,output_hidden_states=True)
+            self.bert = BertModel.from_pretrained('bert-base-uncased', output_attentions=True)
             self.trainable_layers = None
             self.bert_dim = 768
             
@@ -69,8 +70,8 @@ class BERT_Simple(nn.Module):
 
     def forward(self, batchItem, mask=None):
         x = batchItem[0]
-        #print(x)
         bert_rep = self.bert_embedding(x, mask)
+        cls_att = torch.sum(bert_rep[2][11][:,:,0], 1)
         bert_rep = bert_rep[0]
         bert_rep = bert_rep[:,0]
 
@@ -78,7 +79,8 @@ class BERT_Simple(nn.Module):
         out = self.layer_output(hidden)
 
         y = {
-            'y_hat':out
+            'y_hat':out,
+            'cls_att':cls_att
         }
 
         return y

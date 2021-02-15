@@ -11,25 +11,12 @@ import copy
 import math
 import random
 from pathlib import Path
-
-
-def getLogger(name, terminator='\n'):
-    logger = logging.getLogger(name)
-    cHandle = logging.StreamHandler()
-    cHandle.terminator = terminator
-    logger.addHandler(cHandle)
-    return logger
+from .ModelManager import ModelManager, getLogger
 
 
 class ModelManager:
-    def __init__(self, gpu=False, config={}):
-        self.gpu=gpu
-        self.config=config
-        self.target_labels = []
-        if gpu:
-            self.device = torch.device('cuda')
-        else:
-            self.device = torch.device('cpu')
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
     def genPreBuildModel(self, model_name=None):
         pre_build_name = 'BERT_Simple'
@@ -91,7 +78,7 @@ class ModelManager:
             predTrainIter = self.pred(trainDataIter, batch_size=batch_size, batchIterPostProcessor=batchIterPostProcessor, train=True)
             for each_batch_output in predTrainIter:
                 loss_value = self.optimiseNet(each_batch_output)
-                pred, label_pred, gold_target, cls_att = self.evalItem2CPU(each_batch_output) 
+                pred, label_pred, gold_target = self.evalItem2CPU(each_batch_output) 
                 all_loss.append(loss_value)
                 all_prediction.append(pred)
                 all_pred_label.append(label_pred)
@@ -136,8 +123,8 @@ class ModelManager:
             else:
                 return best_saved, True
         else:
-            score2compare = train_ouput['accuracy']
-            if score2compare > best_saved:
+            score2compare = train_ouput['loss']
+            if score2compare < best_saved:
                 return score2compare, False
             else:
                 return best_saved, True
@@ -207,7 +194,7 @@ class ModelManager:
         all_gold_label = []
 
         for each_batch_output in predEvalIter:
-            pred, label_pred, gold_target, cls_att = self.evalItem2CPU(each_batch_output)
+            pred, label_pred, gold_target = self.evalItem2CPU(each_batch_output)
             all_prediction.append(pred)
             all_pred_label.append(label_pred)
             all_gold_label.append(gold_target)
@@ -234,18 +221,12 @@ class ModelManager:
         pred = each_batch_output['model_output']['y_hat']
         softmax_pred = F.softmax(pred, dim=-1)
         label_pred = torch.max(softmax_pred, -1)[1]
-        cls_att = None
-        if 'cls_att' in each_batch_output['model_output']:
-            cls_att = each_batch_output['model_output']['cls_att']
-            cls_att = cls_att.to('cpu').detach().numpy()
-
-
 
         gold_target = each_batch_output['processed_batch_item'][1]
         pred = pred.to('cpu').detach().numpy()
         gold_target = gold_target.to('cpu').detach().numpy()
         label_pred = label_pred.to('cpu').detach().numpy()
-        return pred, label_pred, gold_target, cls_att
+        return pred, label_pred, gold_target
 
 
     def apply(self, dataIter, batch_size=32, batchIterPostProcessor=None):
@@ -254,24 +235,19 @@ class ModelManager:
         all_prediction = []
         all_pred_label = []
         all_gold_label = []
-        all_cls_att = []
 
         for each_batch_output in applyIter:
-            pred, label_pred, gold_target, cls_att = self.evalItem2CPU(each_batch_output)
+            pred, label_pred, gold_target = self.evalItem2CPU(each_batch_output)
             all_prediction.append(pred)
             all_pred_label.append(label_pred)
-            all_cls_att.append(cls_att)
 
         all_prediction = np.concatenate(all_prediction).tolist()
         all_pred_label = np.concatenate(all_pred_label).tolist()
         all_pred_label_string = self.labelID2labelString(all_pred_label)
-        if cls_att is not None:
-            all_cls_att = np.concatenate(all_cls_att).tolist()
 
         output_dict['all_prediction'] = all_prediction
         output_dict['all_pred_label'] = all_pred_label
         output_dict['all_pred_label_string'] = all_pred_label_string
-        output_dict['all_cls_att'] = all_cls_att
         return output_dict
 
     def labelID2labelString(self, all_pred_label):
@@ -303,10 +279,9 @@ class ModelManager:
             #print(batch_item[1])
             batch_output = {}
             infomessage = 'processing batch '+str(batchIter.current_batch_idx)+'/'+str(len(batchIter))
-            predLoger.info(infomessage)
-            #if logging.root.level <= 20:
-                #print(infomessage, end='\r')
-                #print(infomessage)
+            #predLoger.info(infomessage)
+            if logging.root.level <= 20:
+                print(infomessage, end='\r')
             processed_batch_item = batchIterPostProcessor(batch_item, device=self.device)
             if train:
                 model_output = self.net(processed_batch_item)

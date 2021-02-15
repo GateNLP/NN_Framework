@@ -24,7 +24,7 @@ class CLSReaderBase:
             self.config = config
             if 'TARGET' in config:
                 self.target_labels = config['TARGET'].get('labels')
-                print(self.target_labels)
+                #print(self.target_labels)
 
             if 'FIELD_TRANS' in config:
                 self.field_trans = True
