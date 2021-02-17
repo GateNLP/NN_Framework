@@ -284,6 +284,7 @@ class ModelManager:
 
 
     def pred(self, dataIter, batch_size=32, batchIterPostProcessor=None, train=False):
+        dataIter._reset_iter()
         if train:
             self.net.train()
             filling_last_batch = True
@@ -296,7 +297,7 @@ class ModelManager:
 
 
         batchIter = BatchIter(dataIter, batch_size=batch_size, filling_last_batch=filling_last_batch)
-        predLoger = getLogger('predLoger', terminator='\r')
+        predLoger = getLogger('predLoger')
         #print(logging.root.level)
 
         for batch_item in batchIter:
