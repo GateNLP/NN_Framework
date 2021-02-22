@@ -80,6 +80,8 @@ class GateMLTrain:
 
         if self.splitValidation:
             self.train_dataIter, val_dataIter = self.mm.splitValidation(self.train_dataIter, val_split=float(self.splitValidation))
+            self.train_dataIter._reset_iter()
+            val_dataIter._reset_iter()
 
         self.mm.train(self.train_dataIter, save_path=self.model_path, valDataIter=val_dataIter, earlyStopping=True, patience=5, batch_size=self.batch_size)
 
