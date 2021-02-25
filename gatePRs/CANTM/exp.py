@@ -30,7 +30,7 @@ if __name__ == "__main__":
     parser.add_argument("--testInput", help="testing file input path")
     parser.add_argument("--readerType", help="supported readerType: tsv, json", default='json')
     parser.add_argument("--splitValidation", type=float, help="split data from training for validation")
-    parser.add_argument("--nFold", type=int, default=5, help="n fold")
+    parser.add_argument("--nFold", type=int, help="n fold crossvalidation")
     parser.add_argument("--savePath", help="model save path")
     parser.add_argument("--configFile", help="config files if needed")
     parser.add_argument("--x_fields", help="x fileds", default='text')
@@ -68,15 +68,34 @@ if __name__ == "__main__":
         dummy_config = {'MODEL':{'n_classes':len(train_dataIter.target_labels), 'vocab_dim':len(train_dataIter.postProcessor.gensim_dict), 'sample_weights':train_dataIter.label_weights_list}}
         dummy_config.update(config)
         print(dummy_config)
-
         mm = ModelManager(gpu=args.gpu, config=dummy_config)
-        mm.genPreBuildModel('CANTM')
 
         if args.splitValidation:
             train_dataIter, test_dataIter = mm.splitValidation(train_dataIter, val_split=float(args.splitValidation))
+            mm.genPreBuildModel('CANTM')
+            mm.train(train_dataIter, save_path=args.savePath, valDataIter=test_dataIter, earlyStopping=True, patience=10, batch_size=args.batch_size, warm_up=15, earlyStoppingFunction=train_loss_early_stopping, num_epoches=args.num_epoches)
 
-        mm.train(train_dataIter, save_path=args.savePath, valDataIter=test_dataIter, earlyStopping=True, patience=10, batch_size=args.batch_size, warm_up=15, earlyStoppingFunction=train_loss_early_stopping, num_epoches=args.num_epoches)
-        mm.getTopics(train_dataIter.postProcessor.gensim_dict)
+        if args.nFold:
+            all_acc = 0
+            all_f1 = 0
+            current_fold = 0
+            mm.corss_validator.cross_validation(train_dataIter, n_folds=args.nFold)
+            for train_dataIter, test_dataIter in mm.corss_validator:
+                print('!!!!Fold '+str(current_fold))
+                current_fold += 1
+                mm.genPreBuildModel('CANTM')
+                mm.train(train_dataIter, save_path=args.savePath, valDataIter=test_dataIter, earlyStopping=True, patience=10, batch_size=args.batch_size, warm_up=15, earlyStoppingFunction=train_loss_early_stopping, num_epoches=args.num_epoches)
+                result_dict = mm.eval(test_dataIter, batch_size=args.batch_size)
+                all_acc += result_dict['accuracy']
+                all_f1 += result_dict['f1-avg']
+            print('acc: ', all_acc/args.nFold)
+            print('f1: ', all_f1/args.nFold)
+
+
+
+
+
+        #mm.getTopics()
 
 
 

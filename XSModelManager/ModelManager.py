@@ -11,15 +11,55 @@ import copy
 import math
 import random
 from pathlib import Path
+from sklearn.model_selection import KFold
+
+class CrossValidator:
+    def __init__(self):
+        self._reset_iter()
+        self.n_folds = 0
 
 
+    def cross_validation(self, dataIter, n_folds=5):
+        self._reset_iter()
+        self.dataIter = dataIter
+        self.n_folds = n_folds
+        kf = KFold(n_splits=self.n_folds)
+        self.all_ids = copy.deepcopy(dataIter.all_ids)
+        random.shuffle(self.all_ids)
+        self.kfIter = kf.split(self.all_ids)
 
-def getLogger(name, terminator='\n'):
-    logger = logging.getLogger(name)
-    cHandle = logging.StreamHandler()
-    cHandle.terminator = terminator
-    logger.addHandler(cHandle)
-    return logger
+    def __len__(self):
+        return self.n_folds
+
+    def __iter__(self):
+        self._reset_iter()
+        return self
+
+    def __next__(self):
+        if self.current_fold < self.n_folds:
+            self.current_fold += 1
+            train_ids, test_ids = next(self.kfIter)
+            val_dataIter = copy.deepcopy(self.dataIter)
+            val_dataIter.shuffle = False
+            self.dataIter.all_ids = copy.deepcopy(train_ids.tolist())
+            val_dataIter.all_ids = copy.deepcopy(test_ids.tolist())
+            return self.dataIter, val_dataIter
+
+        else:
+            self._reset_iter()
+            raise StopIteration
+
+
+    def _reset_iter(self):
+        self.current_fold = 0
+
+
+#def getLogger(name, terminator='\n'):
+#    logger = logging.getLogger(name)
+#    cHandle = logging.StreamHandler()
+#    cHandle.terminator = terminator
+#    logger.addHandler(cHandle)
+#    return logger
 
 
 class ModelManager:
@@ -27,10 +67,22 @@ class ModelManager:
         self.gpu=gpu
         self.config=config
         self.target_labels = []
+        self.loggers = {}
+        self.trainLoger = self.getLogger('trainLoger')
+
         if gpu:
             self.device = torch.device('cuda')
         else:
             self.device = torch.device('cpu')
+        self.corss_validator = CrossValidator()
+
+    def getLogger(self, name, terminator='\n'):
+        if self.loggers.get(name):
+            return self.loggers.get(name)
+        else:
+            logger = logging.getLogger(name)
+            self.loggers[name] = logger
+            return logger
 
     def genPreBuildModel(self, model_name=None):
         global BatchIter
@@ -48,7 +100,6 @@ class ModelManager:
             self.batchPostProcessor = self.defaultBatchIterPostProcessor
 
         if pre_build_name == 'CANTM':
-            print(111111111)
             from .models.CANTM import CANTM
             self.net = CANTM(self.config)
             from .BatchIterCANTM import BatchIterCANTM as BatchIter
@@ -77,14 +128,16 @@ class ModelManager:
         val_dataIter.all_ids = copy.deepcopy(all_ids[:split_num])
         return train_dataIter, val_dataIter
 
+    def train(self, trainDataIter, **kwargs):
+        return self.train_default(trainDataIter,**kwargs)
 
-    def train(self, trainDataIter, num_epoches=100, valDataIter=None, save_path=None, patience=5, earlyStopping=False, earlyStoppingFunction=None, batch_size=32, batchIterPostProcessor=None, warm_up=1, class_weight=None):
+    def train_default(self, trainDataIter, num_epoches=100, valDataIter=None, save_path=None, patience=5, earlyStopping=False, earlyStoppingFunction=None, batch_size=32, batchIterPostProcessor=None, warm_up=1, class_weight=None):
         self.target_labels = trainDataIter.target_labels 
         if not earlyStoppingFunction:
             earlyStoppingFunction = self.default_early_stopping
         else:
             earlyStopping=True
-        trainLoger = getLogger('trainLoger')
+        #trainLoger = getLogger('trainLoger')
 
         output_dict = {}
         output_dict['accuracy'] = 'no val iter'
@@ -98,7 +151,7 @@ class ModelManager:
             all_gold_label = []
             all_loss = []
             infomessage = 'processing epoch: '+str(epoch)
-            trainLoger.info(infomessage)
+            self.trainLoger.info(infomessage)
             predTrainIter = self.pred(trainDataIter, batch_size=batch_size, batchIterPostProcessor=batchIterPostProcessor, train=True)
             for each_batch_output in predTrainIter:
                 loss_value = self.optimiseNet(each_batch_output)
@@ -115,11 +168,15 @@ class ModelManager:
             current_epoch_accuracy = self.get_accuracy(all_pred_label, all_gold_label)
             if valDataIter:
                 val_eval_output = self.eval(valDataIter, batch_size=batch_size)
-                infomessage = 'epoch: '+str(epoch)+' finished. loss: '+str(current_epoch_loss)+' train_accuracy: '+str(current_epoch_accuracy)+' val_accuracy: '+str(val_eval_output['accuracy'])+' val_fmeasure: '+str(val_eval_output['f-measure'])
+                debugmessage = 'epoch: '+str(epoch)+' finished. loss: '+str(current_epoch_loss)+' train_accuracy: '+str(current_epoch_accuracy)+' val_accuracy: '+str(val_eval_output['accuracy'])+' val_fmeasure: '+str(val_eval_output['f-measure'])
+                infomessage = infomessage = 'epoch: '+str(epoch)+' finished. loss: '+str(current_epoch_loss)+' train_accuracy: '+str(current_epoch_accuracy)+' val_accuracy: '+str(val_eval_output['accuracy'])+' val_fmeasure: '+str(val_eval_output['f1-avg']) 
             else:
                 infomessage = 'epoch: '+str(epoch)+' finished. loss: '+str(current_epoch_loss)+' train_accuracy: '+str(current_epoch_accuracy)
+                debugmessage = ''
+
                 val_eval_output = None
-            trainLoger.info(infomessage)
+            self.trainLoger.info(infomessage)
+            self.trainLoger.debug(debugmessage)
 
             if earlyStopping and (epoch > warm_up):
                 train_output = {'loss': current_epoch_loss, 'accuracy': current_epoch_accuracy}
@@ -127,13 +184,13 @@ class ModelManager:
                 if stopping_signal:
                     best_passed += 1
                 else:
-                    trainLoger.info('save checkpoint')
+                    self.trainLoger.info('save checkpoint')
                     self.save_checkpoint(save_path, best_score, epoch)
                     best_passed = 0
                 if best_passed > patience:
                     epoch, best_score = self.load_checkpoint(save_path, load_optimiser=True)
                     infomessage = 'early stopping, load epoch: '+str(epoch)+'  with stopping metric score: '+str(best_score)
-                    trainLoger.info(infomessage)
+                    self.trainLoger.info(infomessage)
                     break
 
         self.save_checkpoint(save_path, best_score, epoch, save_entire=True)
@@ -153,7 +210,7 @@ class ModelManager:
             else:
                 return best_saved, True
 
-    def save_checkpoint(self, save_path, best_score, epoch, save_entire=False):
+    def save_checkpoint_default(self, save_path, best_score, epoch, save_entire=False):
         model_save_path = Path(save_path)
         model_save_path.mkdir(parents=True, exist_ok=True)
 
@@ -171,6 +228,9 @@ class ModelManager:
         if save_entire:
             entrie_save_path = os.path.join(save_path, 'model.net')
             torch.save(self.net, entrie_save_path)
+
+    def save_checkpoint(self, save_path, best_score, epoch, save_entire=False):
+        return self.save_checkpoint_default(save_path, best_score, epoch, save_entire=False)
 
     def load_model(self, load_path):
         entrie_load_path = os.path.join(load_path, 'model.net')
@@ -231,12 +291,16 @@ class ModelManager:
 
         num_classes = len(self.target_labels)
         output_dict['f-measure'] = {}
+        all_f1 = 0
         for class_id in list(range(num_classes)):
             f_measure_score = self.fMeasure(all_pred_label, all_gold_label, class_id)
             output_dict['f-measure']['class '+self.target_labels[class_id]] = {}
             output_dict['f-measure']['class '+self.target_labels[class_id]]['precision'] = f_measure_score[0]
             output_dict['f-measure']['class '+self.target_labels[class_id]]['recall'] = f_measure_score[1]
             output_dict['f-measure']['class '+self.target_labels[class_id]]['f1'] = f_measure_score[2]
+            all_f1 += f_measure_score[2]
+
+        output_dict['f1-avg'] = all_f1/num_classes
 
         accuracy = self.get_accuracy(all_pred_label, all_gold_label)
         output_dict['accuracy'] = accuracy
@@ -317,7 +381,7 @@ class ModelManager:
 
 
         batchIter = BatchIter(dataIter, batch_size=batch_size, filling_last_batch=filling_last_batch)
-        predLoger = getLogger('predLoger')
+        #predLoger = getLogger('predLoger')
         #print(logging.root.level)
 
         for batch_item in batchIter:

@@ -179,7 +179,8 @@ class ReaderPostProcessorBase:
         return tokened
 
     def bertWord2id(self,tokened, add_special_tokens=True):
-        encoded = self.bert_tokenizer.encode_plus(tokened, max_length=self.max_sent_len, pad_to_max_length=True, is_pretokenized=True, add_special_tokens=add_special_tokens)
+        #encoded = self.bert_tokenizer.encode_plus(tokened, max_length=self.max_sent_len, pad_to_max_length=True, is_pretokenized=True, add_special_tokens=add_special_tokens, truncation=True)
+        encoded = self.bert_tokenizer.encode_plus(tokened, max_length=self.max_sent_len, padding='max_length', is_pretokenized=True, add_special_tokens=add_special_tokens, truncation=True)
         #print(encoded)
         ided = encoded['input_ids']
         if self.return_mask:
