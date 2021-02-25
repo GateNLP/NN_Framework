@@ -120,6 +120,18 @@ class CANTM(nn.Module):
         self.ntopics = 50
         self.n_samples = 1
         self.classification_loss_lambda = 1
+        self.dynamic_sample = False
+
+    @staticmethod
+    def config_as_bool(config_item):
+        if config_item == 'yes':
+            return True
+        elif config_item == True:
+            return True
+        elif config_item == 'True':
+            return True
+        else:
+            return False
 
     def _read_config(self, config):
         if 'MODEL' in config:
@@ -130,6 +142,7 @@ class CANTM(nn.Module):
             self.n_samples = int(config['MODEL'].get('n_samples', 1))
             self.classification_loss_lambda = int(config['MODEL'].get('classification_loss_lambda', 1))
             self.sample_weights = config['MODEL'].get('sample_weights', None)
+            self.dynamic_sample = self.config_as_bool(config['MODEL'].get('dynamic_sample', 'no'))
 
     def reset_parameters(self):
         init.zeros_(self.log_sigma_z1.weight)
@@ -165,7 +178,7 @@ class CANTM(nn.Module):
         class_topic_rec_loss = 0
 
         n_samples = copy.deepcopy(self.n_samples)
-        if self.sample_weights:
+        if self.sample_weights and self.dynamic_sample:
             n_samples = self.get_weighted_num_samples(true_y_ids)
         #n_samples = 10
         #print(n_samples)

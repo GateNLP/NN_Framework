@@ -18,10 +18,21 @@ class CrossValidator:
         self._reset_iter()
         self.n_folds = 0
 
+    def reconstruct_ids(self, each_fold):
+        output_ids = [[],[]] #[train_ids, test_ids]
+        for sp_id in range(len(each_fold)):
+            current_output_ids = output_ids[sp_id]
+            current_fold_ids = each_fold[sp_id]
+            for doc_id in current_fold_ids:
+                current_output_ids.append(self.all_ids[doc_id])
+        return output_ids
+
 
     def cross_validation(self, dataIter, n_folds=5):
         self._reset_iter()
-        self.dataIter = dataIter
+        self.dataIter = copy.deepcopy(dataIter)
+        self.valdataIter = copy.deepcopy(dataIter)
+        self.valdataIter.shuffle = False
         self.n_folds = n_folds
         kf = KFold(n_splits=self.n_folds)
         self.all_ids = copy.deepcopy(dataIter.all_ids)
@@ -38,12 +49,11 @@ class CrossValidator:
     def __next__(self):
         if self.current_fold < self.n_folds:
             self.current_fold += 1
-            train_ids, test_ids = next(self.kfIter)
-            val_dataIter = copy.deepcopy(self.dataIter)
-            val_dataIter.shuffle = False
-            self.dataIter.all_ids = copy.deepcopy(train_ids.tolist())
-            val_dataIter.all_ids = copy.deepcopy(test_ids.tolist())
-            return self.dataIter, val_dataIter
+            train_ids, test_ids = self.reconstruct_ids(next(self.kfIter))
+            #print(train_ids, test_ids)
+            self.dataIter.all_ids = copy.deepcopy(train_ids)
+            self.valdataIter.all_ids = copy.deepcopy(test_ids)
+            return self.dataIter, self.valdataIter
 
         else:
             self._reset_iter()

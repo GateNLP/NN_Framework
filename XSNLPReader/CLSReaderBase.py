@@ -138,7 +138,7 @@ class CLSReaderBase:
             self.label_weights_list.append(sample_weight)
         print(self.label_weights_list)
 
-    def buildDict(self, no_below=3, no_above=0.7, keep_n=5000):
+    def buildDict(self, no_below=1, no_above=0.9, keep_n=5000):
         from gensim.corpora.dictionary import Dictionary
         ori_pp_mode = copy.deepcopy(self.postProcessor.postProcessMethod)
         ori_go_postprocess = copy.deepcopy(self.goPoseprocessor)

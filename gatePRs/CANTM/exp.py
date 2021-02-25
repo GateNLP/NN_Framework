@@ -66,9 +66,12 @@ if __name__ == "__main__":
         train_dataIter.cal_sample_weights()
 
         dummy_config = {'MODEL':{'n_classes':len(train_dataIter.target_labels), 'vocab_dim':len(train_dataIter.postProcessor.gensim_dict), 'sample_weights':train_dataIter.label_weights_list}}
-        dummy_config.update(config)
-        print(dummy_config)
-        mm = ModelManager(gpu=args.gpu, config=dummy_config)
+        if 'MODEL' in config:
+            config['MODEL'].update(dummy_config['MODEL'])
+        else:
+            config['MODEL'] = dummy_config['MODEL']
+        print(config)
+        mm = ModelManager(gpu=args.gpu, config=config)
 
         if args.splitValidation:
             train_dataIter, test_dataIter = mm.splitValidation(train_dataIter, val_split=float(args.splitValidation))
