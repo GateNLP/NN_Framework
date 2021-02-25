@@ -6,7 +6,7 @@ from transformers import BertTokenizer
 from pathlib import Path
 
 class ReaderPostProcessorBase:
-    def __init__(self, config=None, stopwords_source=['nltk','snowball', 'mallet'], return_mask=False, max_sent_len=510):
+    def __init__(self, config=None, stopwords_source=['nltk','snowball', 'mallet'], return_mask=False, max_sent_len=510, gensim_dict=None):
         self.config = config
         self.max_sent_len = max_sent_len
         self.return_mask = return_mask
@@ -21,6 +21,7 @@ class ReaderPostProcessorBase:
         self.parent = os.path.dirname(self.script_path)
         stop_list_dir = os.path.join(self.parent, 'stopwords')
         self._get_stop_words(stop_list_dir)
+        self.gensim_dict = None
         self._initPostProcessor()
 
 
@@ -186,3 +187,21 @@ class ReaderPostProcessorBase:
             return ided, mask
         else:
             return ided
+
+    def postProcess4Dict(self, sample):
+        split_x = []
+        for x_field in self.x_fields:
+            current_rawx = self._get_sample(sample, x_field)
+            split_x.append(current_rawx)
+
+        current_rawx = ' '.join(split_x)
+        current_cleand_rawx = self.scholarTextClean(current_rawx, lower=True, strip_html=True, keep_at_mentions=False)
+        current_nltk_tokened_rawx = self.nltkTokenizer(current_cleand_rawx)
+        current_nltk_tokened_rawx = self.scholarTokenClean(current_nltk_tokened_rawx, stopwords=self.stop_words)
+        current_nltk_tokened_rawx = [t for t in current_nltk_tokened_rawx if t != '_']
+
+        return current_nltk_tokened_rawx
+
+
+
+

@@ -1,0 +1,11 @@
+{
+  "workingSet": null,
+  "instanceType": null,
+  "targetFeature": null,
+  "targetFile": null,
+  "gpu": "False",
+  "model_path": null,
+  "splitValidation": null,
+  "batch_size":16
+}
+

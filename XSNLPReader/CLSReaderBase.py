@@ -2,18 +2,23 @@ import random
 import math
 import json
 import torch
+import copy
 
 class CLSReaderBase:
-    def __init__(self, postProcessor=None, shuffle=False, config=None):
+    def __init__(self, postProcessor=None, shuffle=False, config=None, build_dict=False, gensim_dict=None):
         self.label_count_dict = {}
         self.label_weights_list = None
         self._readConfigs(config)
         self.shuffle = shuffle
+        self.gensim_dict = gensim_dict
+
         if postProcessor:
             self.setPostProcessor(postProcessor)
         else:
             self.postProcessor = None
         self.goPoseprocessor = True
+
+
 
     def _readConfigs(self, config):
         self.target_labels = []
@@ -50,6 +55,7 @@ class CLSReaderBase:
     def setPostProcessor(self, postProcessor):
         self.postProcessor = postProcessor
         self.updateTargetLabels2PostProcessor()
+
 
     def updateTargetLabels2PostProcessor(self):
         self.postProcessor.labelsFields = self.target_labels
@@ -112,7 +118,7 @@ class CLSReaderBase:
         self.label_count_list = [0]*len(self.postProcessor.labelsFields)
         for item in self:
             #print(item)
-            annotation = item['selected_label']
+            annotation = item[self.target_field]
             annotation_idx = self.postProcessor.labelsFields.index(annotation)
             self.label_count_list[annotation_idx] += 1
             if annotation not in self.label_count_dict:
@@ -128,9 +134,27 @@ class CLSReaderBase:
         max_count = max(self.label_count_list)
         for i in range(len(self.label_count_list)):
             current_count = self.label_count_list[i]
-            num_samples = math.ceil(max_count/current_count)
-            self.label_weights_list.append(num_samples)
+            sample_weight = max_count/current_count
+            self.label_weights_list.append(sample_weight)
         print(self.label_weights_list)
+
+    def buildDict(self, no_below=3, no_above=0.7, keep_n=5000):
+        from gensim.corpora.dictionary import Dictionary
+        ori_pp_mode = copy.deepcopy(self.postProcessor.postProcessMethod)
+        ori_go_postprocess = copy.deepcopy(self.goPoseprocessor)
+        self.postProcessor.postProcessMethod = 'postProcess4Dict'
+        self.goPoseprocessor = True
+        self._reset_iter()
+        #print(next(self))
+        self.gensim_dict = Dictionary(self)
+        self._reset_iter()
+        self.postProcessor.postProcessMethod = ori_pp_mode
+        self.goPoseprocessor = ori_go_postprocess
+        self.gensim_dict.filter_extremes(no_below=no_below, no_above=no_above, keep_n=keep_n)
+
+        
+        if self.postProcessor:
+            self.postProcessor.gensim_dict = self.gensim_dict
 
 
 

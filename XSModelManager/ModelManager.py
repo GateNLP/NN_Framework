@@ -5,12 +5,13 @@ import torch.nn.functional as F
 import numpy as np
 import os
 from pathlib import Path
-from .BatchIter import BatchIter
+#from .BatchIter import BatchIter
 import logging
 import copy
 import math
 import random
 from pathlib import Path
+
 
 
 def getLogger(name, terminator='\n'):
@@ -32,6 +33,7 @@ class ModelManager:
             self.device = torch.device('cpu')
 
     def genPreBuildModel(self, model_name=None):
+        global BatchIter
         pre_build_name = 'BERT_Simple'
         if model_name:
             pre_build_name = model_name
@@ -42,6 +44,15 @@ class ModelManager:
         if pre_build_name == 'BERT_Simple':
             from .models.BERT_Simple import BERT_Simple
             self.net = BERT_Simple(self.config)
+            from .BatchIter import BatchIter
+            self.batchPostProcessor = self.defaultBatchIterPostProcessor
+
+        if pre_build_name == 'CANTM':
+            print(111111111)
+            from .models.CANTM import CANTM
+            self.net = CANTM(self.config)
+            from .BatchIterCANTM import BatchIterCANTM as BatchIter
+            self.batchPostProcessor = self.cantmBatchIterPostProcessor
 
         if self.gpu:
             self.net.cuda()
@@ -67,7 +78,7 @@ class ModelManager:
         return train_dataIter, val_dataIter
 
 
-    def train(self, trainDataIter, num_epoches=100, valDataIter=None, save_path=None, patience=5, earlyStopping=False, earlyStoppingFunction=None, batch_size=32, batchIterPostProcessor=None, warm_up=1):
+    def train(self, trainDataIter, num_epoches=100, valDataIter=None, save_path=None, patience=5, earlyStopping=False, earlyStoppingFunction=None, batch_size=32, batchIterPostProcessor=None, warm_up=1, class_weight=None):
         self.target_labels = trainDataIter.target_labels 
         if not earlyStoppingFunction:
             earlyStoppingFunction = self.default_early_stopping
@@ -103,8 +114,8 @@ class ModelManager:
             current_epoch_loss = sum(all_loss)/len(all_loss)
             current_epoch_accuracy = self.get_accuracy(all_pred_label, all_gold_label)
             if valDataIter:
-                val_eval_output = self.eval(valDataIter)
-                infomessage = 'epoch: '+str(epoch)+' finished. loss: '+str(current_epoch_loss)+' train_accuracy: '+str(current_epoch_accuracy)+' val_accuracy: '+str(val_eval_output['accuracy'])
+                val_eval_output = self.eval(valDataIter, batch_size=batch_size)
+                infomessage = 'epoch: '+str(epoch)+' finished. loss: '+str(current_epoch_loss)+' train_accuracy: '+str(current_epoch_accuracy)+' val_accuracy: '+str(val_eval_output['accuracy'])+' val_fmeasure: '+str(val_eval_output['f-measure'])
             else:
                 infomessage = 'epoch: '+str(epoch)+' finished. loss: '+str(current_epoch_loss)+' train_accuracy: '+str(current_epoch_accuracy)
                 val_eval_output = None
@@ -218,6 +229,15 @@ class ModelManager:
         #print(all_prediction[0])
         #print(all_pred_label)
 
+        num_classes = len(self.target_labels)
+        output_dict['f-measure'] = {}
+        for class_id in list(range(num_classes)):
+            f_measure_score = self.fMeasure(all_pred_label, all_gold_label, class_id)
+            output_dict['f-measure']['class '+self.target_labels[class_id]] = {}
+            output_dict['f-measure']['class '+self.target_labels[class_id]]['precision'] = f_measure_score[0]
+            output_dict['f-measure']['class '+self.target_labels[class_id]]['recall'] = f_measure_score[1]
+            output_dict['f-measure']['class '+self.target_labels[class_id]]['f1'] = f_measure_score[2]
+
         accuracy = self.get_accuracy(all_pred_label, all_gold_label)
         output_dict['accuracy'] = accuracy
         return output_dict
@@ -293,7 +313,7 @@ class ModelManager:
             filling_last_batch = False
 
         if not batchIterPostProcessor:
-            batchIterPostProcessor = self.defaultBatchIterPostProcessor
+            batchIterPostProcessor = self.batchPostProcessor
 
 
         batchIter = BatchIter(dataIter, batch_size=batch_size, filling_last_batch=filling_last_batch)
@@ -304,11 +324,12 @@ class ModelManager:
             #print(batch_item[1])
             batch_output = {}
             infomessage = 'processing batch '+str(batchIter.current_batch_idx)+'/'+str(len(batchIter))
-            predLoger.info(infomessage)
-            #if logging.root.level <= 20:
-                #print(infomessage, end='\r')
+            #predLoger.info(infomessage)
+            if logging.root.level <= 20:
+                print(infomessage, end='\r')
                 #print(infomessage)
             processed_batch_item = batchIterPostProcessor(batch_item, device=self.device)
+            #print(processed_batch_item)
             if train:
                 model_output = self.net(processed_batch_item)
             else:
@@ -325,3 +346,63 @@ class ModelManager:
         text_tensor = torch.tensor(batch_item[0], device=device)
         target_tensor = torch.tensor(batch_item[1], device=device)
         return [text_tensor, target_tensor]
+
+    @staticmethod
+    def cantmBatchIterPostProcessor(batch_item, device=torch.device('cpu')):
+        bert_input_tensor = torch.tensor(batch_item['bert_ided'], device=device)
+        count_matrix = torch.tensor(batch_item['count_matrix'], device=device)
+        target_labels = torch.tensor(batch_item['target_label'], device=device)
+        #target_labels = self.y2onehot(target_labels, device)
+        return [bert_input_tensor, target_labels, count_matrix]
+
+
+
+    def fMeasure(self, all_prediction, true_label, class_id, ignoreid=None):
+        #print(class_id)
+        mask = [class_id] * len(all_prediction)
+        mask_arrary = np.array(mask)
+        pred_mask = np.argwhere(all_prediction==class_id)
+        #print(pred_mask)
+        true_mask = np.argwhere(true_label==class_id)
+        #print(1111)
+        #print(true_mask)
+        #all_prediction = all_prediction.tolist()
+        #true_label = true_label.tolist()
+        #print(len(true_mask))
+
+        total_pred = 0
+        total_true = 0
+        #print(total_pred, total_true)
+
+        #print(all_prediction)
+        #print(true_label)
+
+
+        pc = 0
+        for i in pred_mask:
+            if all_prediction[i[0]] == true_label[i[0]]:
+                pc+=1
+            if true_label[i[0]] != ignoreid:
+                total_pred += 1
+
+        rc = 0
+        for i in true_mask:
+            if all_prediction[i[0]] == true_label[i[0]]:
+                rc+=1
+            if true_label[i[0]] != ignoreid:
+                total_true += 1
+
+        if total_pred == 0:
+            precision = 0
+        else:
+            precision = float(pc)/total_pred
+        if total_true == 0:
+            recall = 0
+        else:
+            recall = float(rc)/total_true
+        if (precision+recall)==0:
+            f_measure = 0
+        else:
+            f_measure = 2*((precision*recall)/(precision+recall))
+        #print(total_true)
+        return precision, recall, f_measure, total_pred, total_true, pc, rc

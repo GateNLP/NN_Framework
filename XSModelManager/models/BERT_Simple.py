@@ -10,22 +10,25 @@ class BERT_Embedding(nn.Module):
     def __init__(self, config):
         super().__init__()
 
-        try:
-            bert_model_path = os.path.join(config['BERT'].get('bert_path'), 'model')
-            self.bert_dim = int(config['BERT'].get('bert_dim'))
+        self.trainable_layers = None
+        if 'BERT' in config:
+            bert_model_path = config['BERT'].get('bert_path')
+            self.bert_dim = int(config['BERT'].get('bert_dim', 768))
             self.trainable_layers = config['BERT'].get('trainable_layers')
+
+        try:
             self.bert = BertModel.from_pretrained(bert_model_path, output_attentions=True,output_hidden_states=True)
         except Exception as e:
             print(e)
             print('load from web')
             #self.bert = BertModel.from_pretrained('bert-base-uncased', output_attentions=True,output_hidden_states=True)
             self.bert = BertModel.from_pretrained('bert-base-uncased', output_attentions=True)
-            self.trainable_layers = None
+            #self.trainable_layers = None
             self.bert_dim = 768
             
 
         if self.trainable_layers:
-            #print(self.trainable_layers)
+            print(self.trainable_layers)
             #self.bert = BertModel.from_pretrained(bert_model_path)
             for name, param in self.bert.named_parameters():
                 if name in self.trainable_layers:

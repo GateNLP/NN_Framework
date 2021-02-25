@@ -13,8 +13,12 @@ class BertPostProcessor(ReaderPostProcessorBase):
     def postProcess(self, sample):
         if self.postProcessMethod == 'postProcess4Model':
             return self.postProcess4Model(sample)
+        elif self.postProcessMethod == 'postProcess4Dict':
+            return self.postProcess4Dict(sample)
         elif self.postProcessMethod == 'postProcess4GATEapply':
             return self.postProcess4GATEapply(sample)
+        else:
+            return sample
 
 
 
