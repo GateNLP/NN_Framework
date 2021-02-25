@@ -59,14 +59,20 @@ dependencies:
   - zstd=1.4.5=h9ceee32_0
   - pip:
     - chardet==4.0.0
+    - configobj==5.0.6
     - configsimple==0.4
     - filelock==3.0.12
+    - gensim==3.8.3
     - idna==2.10
     - loguru==0.5.3
     - packaging==20.9
     - pyparsing==2.4.7
     - requests==2.25.1
     - sacremoses==0.0.43
+    - scikit-learn==0.24.1
+    - scipy==1.6.1
+    - smart-open==4.2.0
+    - threadpoolctl==2.1.0
     - tokenizers==0.9.4
     - transformers==4.2.2
     - urllib3==1.26.3
