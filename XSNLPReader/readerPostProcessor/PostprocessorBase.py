@@ -9,6 +9,9 @@ class ReaderPostProcessorBase:
     def __init__(self, config=None, stopwords_source=['nltk','snowball', 'mallet'], return_mask=False, max_sent_len=510, gensim_dict=None):
         self.config = config
         self.max_sent_len = max_sent_len
+        if 'READER_POSTPROCESSOR' in self.config:
+            self.max_sent_len = int(config['READER_POSTPROCESSOR'].get('max_sent_len', 510))
+
         self.return_mask = return_mask
         punct_chars = list(set(string.punctuation)-set("_"))
         punctuation = ''.join(punct_chars)

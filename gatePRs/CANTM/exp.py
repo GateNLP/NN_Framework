@@ -38,7 +38,7 @@ if __name__ == "__main__":
     parser.add_argument("--noUpdateTarget", help="not update targets when reading the training input", default=False, action='store_true')
     parser.add_argument("--batch_size", type=int, default=16, help="batch size")
     parser.add_argument("--gpu", help="use gpu", default=False, action='store_true')
-    parser.add_argument("--num_epoches", type=int, default=100, help="number of training epoches")
+    parser.add_argument("--num_epoches", type=int, default=200, help="number of training epoches")
     args = parser.parse_args()
 
     global DataReader
@@ -54,14 +54,14 @@ if __name__ == "__main__":
     x_fields = args.x_fields.split(',')
 
 
-    readerPostProcessor = CANTMpostProcessor(x_fields=x_fields, y_field=args.y_field)
+    readerPostProcessor = CANTMpostProcessor(config=config, x_fields=x_fields, y_field=args.y_field)
 
     updateTarget = not args.noUpdateTarget
 
     test_dataIter = None
 
     if args.trainInput:
-        train_dataIter = DataReader(args.trainInput, postProcessor=readerPostProcessor, shuffle=True, updateTarget=updateTarget)
+        train_dataIter = DataReader(args.trainInput, postProcessor=readerPostProcessor, shuffle=True, updateTarget=updateTarget, config=config)
         train_dataIter.buildDict()
         train_dataIter.cal_sample_weights()
 
@@ -76,7 +76,9 @@ if __name__ == "__main__":
         if args.splitValidation:
             train_dataIter, test_dataIter = mm.splitValidation(train_dataIter, val_split=float(args.splitValidation))
             mm.genPreBuildModel('CANTM')
-            mm.train(train_dataIter, save_path=args.savePath, valDataIter=test_dataIter, earlyStopping=True, patience=10, batch_size=args.batch_size, warm_up=15, earlyStoppingFunction=train_loss_early_stopping, num_epoches=args.num_epoches)
+            mm.train(train_dataIter, save_path=args.savePath, valDataIter=test_dataIter, earlyStopping=True, patience=4, batch_size=args.batch_size, warm_up=5, earlyStoppingFunction=train_loss_early_stopping, num_epoches=args.num_epoches)
+            result_dict = mm.eval(test_dataIter, batch_size=args.batch_size)
+            print(result_dict)
 
         if args.nFold:
             all_acc = 0
@@ -84,11 +86,14 @@ if __name__ == "__main__":
             current_fold = 0
             mm.corss_validator.cross_validation(train_dataIter, n_folds=args.nFold)
             for train_dataIter, test_dataIter in mm.corss_validator:
+                #train_dataIter, val_dataIter = mm.splitValidation(train_dataIter, val_split=0.1)
                 print('!!!!Fold '+str(current_fold))
                 current_fold += 1
                 mm.genPreBuildModel('CANTM')
-                mm.train(train_dataIter, save_path=args.savePath, valDataIter=test_dataIter, earlyStopping=True, patience=10, batch_size=args.batch_size, warm_up=15, earlyStoppingFunction=train_loss_early_stopping, num_epoches=args.num_epoches)
+                mm.train(train_dataIter, save_path=args.savePath, valDataIter=test_dataIter, earlyStopping=True, patience=4, batch_size=args.batch_size, warm_up=5, earlyStoppingFunction=train_loss_early_stopping, num_epoches=args.num_epoches)
+                #mm.train(train_dataIter, save_path=args.savePath, valDataIter=val_dataIter, earlyStopping=True, patience=10, batch_size=args.batch_size, warm_up=5, num_epoches=args.num_epoches)
                 result_dict = mm.eval(test_dataIter, batch_size=args.batch_size)
+                print(result_dict)
                 all_acc += result_dict['accuracy']
                 all_f1 += result_dict['f1-avg']
             print('acc: ', all_acc/args.nFold)

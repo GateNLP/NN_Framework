@@ -25,16 +25,17 @@ class ModelManager_CANTM(ModelManager):
         gold_target = each_batch_output['processed_batch_item'][1]
         loss = each_batch_output['model_output']['loss']
         cls_loss = each_batch_output['model_output']['cls_loss']
-
+        log_y_hat_rec_loss = each_batch_output['model_output']['log_y_hat_rec_loss']
         loss.backward()
         self.optimizer.step()
 
         loss_value = float(cls_loss.data.item())
+        #loss_value = float(log_y_hat_rec_loss.data.item())
         return loss_value
 
     def train(self, trainDataIter, **kwargs):
         self.gensim_dict = trainDataIter.postProcessor.gensim_dict
-        return self.train_default(trainDataIter, **kwargs)
+        self.train_default(trainDataIter, **kwargs)
 
 
     def setOptimiser(self):
@@ -88,7 +89,7 @@ class ModelManager_CANTM(ModelManager):
         return topicWordList
 
     def save_checkpoint(self, save_path, best_score, epoch, save_entire=False):
-        self.save_checkpoint_default(save_path, best_score, epoch, save_entire=False)
+        self.save_checkpoint_default(save_path, best_score, epoch, save_entire=save_entire)
         gensim_dict_save_path = os.path.join(save_path, 'gensim_dict.pt')
         save_dict = {'gensim_dict': self.gensim_dict}
         torch.save(save_dict, gensim_dict_save_path)

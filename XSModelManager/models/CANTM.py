@@ -89,7 +89,10 @@ class CANTM(nn.Module):
         self.x_only_topics = Topics(self.z_dim, vocab_dim)
         self.xy_classifier = LinearClassifier(self.z_dim, self.n_classes)
         self.class_topics = Topics(self.n_classes, vocab_dim)
-        self.class_criterion = nn.CrossEntropyLoss()
+        if self.sample_weights and self.weight_loss:
+            self.class_criterion = nn.CrossEntropyLoss(weight=torch.tensor(self.sample_weights))
+        else:
+            self.class_criterion = nn.CrossEntropyLoss()
 
         #############M2############################################
         self.x_y_dim = bert_dim + self.n_classes
@@ -121,6 +124,8 @@ class CANTM(nn.Module):
         self.n_samples = 1
         self.classification_loss_lambda = 1
         self.dynamic_sample = False
+        self.weight_loss = False
+        self.sample_weights = None
 
     @staticmethod
     def config_as_bool(config_item):
@@ -143,6 +148,7 @@ class CANTM(nn.Module):
             self.classification_loss_lambda = int(config['MODEL'].get('classification_loss_lambda', 1))
             self.sample_weights = config['MODEL'].get('sample_weights', None)
             self.dynamic_sample = self.config_as_bool(config['MODEL'].get('dynamic_sample', 'no'))
+            self.weight_loss = self.config_as_bool(config['MODEL'].get('weight_loss', 'no'))
 
     def reset_parameters(self):
         init.zeros_(self.log_sigma_z1.weight)
@@ -180,6 +186,8 @@ class CANTM(nn.Module):
         n_samples = copy.deepcopy(self.n_samples)
         if self.sample_weights and self.dynamic_sample:
             n_samples = self.get_weighted_num_samples(true_y_ids)
+        if not self.training:
+            n_samples = 1
         #n_samples = 10
         #print(n_samples)
 
@@ -190,7 +198,8 @@ class CANTM(nn.Module):
             z1 = self.h_to_z(z1)
             log_probz_1 = self.x_only_topics(z1)
 
-            if self.mode == 'train' or self.mode == 'update_catopic':
+            #if self.mode == 'train' or self.mode == 'update_catopic':
+            if self.training:
                 y_hat_logis = self.xy_classifier(z1)
                 y_hat = torch.softmax(y_hat_logis, dim=-1)
                 if self.mode == 'train':
@@ -216,8 +225,9 @@ class CANTM(nn.Module):
 
             kldz2 += kld(mu_z2, log_sigma_z2)
             rec_loss_z2 = rec_loss_z2 - (log_prob_z2 * bow).sum(dim=-1)
-            if self.mode == 'train':
+            if self.training and self.mode == 'train':
                 log_y_hat_rec_loss = log_y_hat_rec_loss - (log_y_hat_rec*true_y).sum(dim=-1)
+                #log_y_hat_rec_loss = log_y_hat_rec_loss - (log_y_hat_rec*y_hat).sum(dim=-1)
             else:
                 log_y_hat_rec_loss = log_y_hat_rec_loss - (log_y_hat_rec*y_hat).sum(dim=-1)
 
@@ -233,7 +243,7 @@ class CANTM(nn.Module):
 
         total_loss = elbo_z1.sum() + elbo_z2.sum() + class_topic_rec_loss.sum() + classifier_loss*self.banlance_lambda*self.classification_loss_lambda
         
-        if self.mode == 'update_catopic':
+        if self.training and self.mode == 'update_catopic':
             total_loss = elbo_z2.sum()
 
         y = {
@@ -245,7 +255,8 @@ class CANTM(nn.Module):
             'cls_loss': classifier_loss,
             'class_topic_loss': class_topic_rec_loss,
             'y_hat': y_hat_logis,
-            'elbo_x': elbo_z1
+            'elbo_x': elbo_z1,
+            'log_y_hat_rec_loss':log_y_hat_rec_loss.sum()
         }
 
         return y

@@ -77,7 +77,6 @@ class ModelManager:
         self.gpu=gpu
         self.config=config
         self.target_labels = []
-        self.loggers = {}
         self.trainLoger = self.getLogger('trainLoger')
 
         if gpu:
@@ -87,12 +86,8 @@ class ModelManager:
         self.corss_validator = CrossValidator()
 
     def getLogger(self, name, terminator='\n'):
-        if self.loggers.get(name):
-            return self.loggers.get(name)
-        else:
-            logger = logging.getLogger(name)
-            self.loggers[name] = logger
-            return logger
+        logger = logging.getLogger(name)
+        return logger
 
     def genPreBuildModel(self, model_name=None):
         global BatchIter
@@ -139,7 +134,7 @@ class ModelManager:
         return train_dataIter, val_dataIter
 
     def train(self, trainDataIter, **kwargs):
-        return self.train_default(trainDataIter,**kwargs)
+        self.train_default(trainDataIter,**kwargs)
 
     def train_default(self, trainDataIter, num_epoches=100, valDataIter=None, save_path=None, patience=5, earlyStopping=False, earlyStoppingFunction=None, batch_size=32, batchIterPostProcessor=None, warm_up=1, class_weight=None):
         self.target_labels = trainDataIter.target_labels 
@@ -240,7 +235,7 @@ class ModelManager:
             torch.save(self.net, entrie_save_path)
 
     def save_checkpoint(self, save_path, best_score, epoch, save_entire=False):
-        return self.save_checkpoint_default(save_path, best_score, epoch, save_entire=False)
+        return self.save_checkpoint_default(save_path, best_score, epoch, save_entire=save_entire)
 
     def load_model(self, load_path):
         entrie_load_path = os.path.join(load_path, 'model.net')

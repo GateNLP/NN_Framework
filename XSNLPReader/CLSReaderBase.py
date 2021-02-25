@@ -140,6 +140,11 @@ class CLSReaderBase:
 
     def buildDict(self, no_below=3, no_above=0.7, keep_n=5000):
         from gensim.corpora.dictionary import Dictionary
+        if 'GENSIM_DICT' in self.config:
+            no_below = int(self.config['GENSIM_DICT'].get('no_below', 3))
+            no_above = float(self.config['GENSIM_DICT'].get('no_above', 0.7))
+            keep_n = int(self.config['GENSIM_DICT'].get('keep_n', 5000))
+
         ori_pp_mode = copy.deepcopy(self.postProcessor.postProcessMethod)
         ori_go_postprocess = copy.deepcopy(self.goPoseprocessor)
         self.postProcessor.postProcessMethod = 'postProcess4Dict'
