@@ -29,6 +29,8 @@ class ModelManager_CANTM(ModelManager):
         loss.backward()
         self.optimizer.step()
 
+        #print(each_batch_output['model_output'])
+
         loss_value = float(cls_loss.data.item())
         #loss_value = float(log_y_hat_rec_loss.data.item())
         return loss_value
