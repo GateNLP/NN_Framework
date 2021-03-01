@@ -149,7 +149,7 @@ class CANTM(nn.Module):
             self.sample_weights = config['MODEL'].get('sample_weights', None)
             self.dynamic_sample = self.config_as_bool(config['MODEL'].get('dynamic_sample', 'no'))
             self.weight_loss = self.config_as_bool(config['MODEL'].get('weight_loss', 'no'))
-            self.mode = self.config_as_bool(config['MODEL'].get('mode', 'train'))
+            self.mode = config['MODEL'].get('mode', 'train')
 
     def reset_parameters(self):
         init.zeros_(self.log_sigma_z1.weight)
@@ -196,9 +196,12 @@ class CANTM(nn.Module):
             log_probz_1 = self.x_only_topics(z1)
 
             if self.training:
+                #print(222222)
                 y_hat_logis = self.xy_classifier(z1)
                 y_hat = torch.softmax(y_hat_logis, dim=-1)
+                #print(self.mode)
                 if self.mode == 'train':
+                    #print(11111)
                     classifier_loss += self.class_criterion(y_hat_logis, true_y_ids)
             else:
                 y_hat_logis = self.xy_classifier(mu_z1)
