@@ -65,6 +65,38 @@ class CANTMpostProcessor(ReaderPostProcessorBase):
 
 
 
+    def postProcess4TopicPreTrain(self, sample):
+        split_x = []
+        for x_field in self.x_fields:
+            current_rawx = self._get_sample(sample, x_field)
+            split_x.append(current_rawx)
+
+        current_rawx = ' '.join(split_x)
+        current_cleand_rawx = self.scholarTextClean(current_rawx, lower=True, strip_html=True, keep_at_mentions=False)
+        current_nltk_tokened_rawx = self.nltkTokenizer(current_cleand_rawx)
+        current_nltk_tokened_rawx = self.scholarTokenClean(current_nltk_tokened_rawx, stopwords=self.stop_words)
+        current_nltk_tokened_rawx = [t for t in current_nltk_tokened_rawx if t != '_']
+        if self.gensim_dict:
+            current_count_matrix = self.doc2countHot(current_nltk_tokened_rawx)
+        else:
+            current_count_matrix = None
+
+        current_bert_tokenized = self.bertTokenizer(current_cleand_rawx)
+        current_bert_ided = self.bertWord2id(current_bert_tokenized)
+        y = sample[self.y_field]
+        if self.label2id:
+            y = self.label2ids(y)
+
+        output_dict = {}
+        output_dict['bert_tokenized'] = current_bert_tokenized
+        output_dict['bert_ided'] = current_bert_ided
+        output_dict['count_matrix'] = current_count_matrix
+        output_dict['nltk_tokened_rawx'] = current_nltk_tokened_rawx
+        output_dict['target_label'] = y
+        return output_dict
+
+
+
 
 
 

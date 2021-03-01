@@ -1,2 +1,3 @@
 from .BertPostProcessor import BertPostProcessor
 from .CANTMpostProcessor import CANTMpostProcessor
+from .SentRelPostProcessor import SentRelPostProcessor

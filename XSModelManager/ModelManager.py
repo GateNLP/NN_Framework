@@ -110,6 +110,12 @@ class ModelManager:
             from .BatchIterCANTM import BatchIterCANTM as BatchIter
             self.batchPostProcessor = self.cantmBatchIterPostProcessor
 
+        if pre_build_name == 'BERT_Rel_Simple':
+            from .models.BERT_Rel_Simple import BERT_Rel_Simple
+            self.net = BERT_Rel_Simple(self.config)
+            from .BatchIter import BatchIter
+            self.batchPostProcessor = self.defaultBatchIterPostProcessor
+
         if self.gpu:
             self.net.cuda()
 

@@ -116,7 +116,7 @@ class CANTM(nn.Module):
 
 
     def _init_params(self):
-        self.mode = 'train' # 'apply, update_catopic'
+        self.mode = 'train' # 'apply, update_catopic', 'topic pretrain'
         self.hidden_dim = 300
         self.n_classes = 2
         self.z_dim = 100
@@ -149,6 +149,7 @@ class CANTM(nn.Module):
             self.sample_weights = config['MODEL'].get('sample_weights', None)
             self.dynamic_sample = self.config_as_bool(config['MODEL'].get('dynamic_sample', 'no'))
             self.weight_loss = self.config_as_bool(config['MODEL'].get('weight_loss', 'no'))
+            self.mode = self.config_as_bool(config['MODEL'].get('mode', 'train'))
 
     def reset_parameters(self):
         init.zeros_(self.log_sigma_z1.weight)
@@ -188,22 +189,16 @@ class CANTM(nn.Module):
             n_samples = self.get_weighted_num_samples(true_y_ids)
         if not self.training:
             n_samples = 1
-        #n_samples = 10
-        #print(n_samples)
-
-
 
         for i in range(n_samples):
             z1 = torch.zeros_like(mu_z1).normal_() * torch.exp(log_sigma_z1) + mu_z1
             z1 = self.h_to_z(z1)
             log_probz_1 = self.x_only_topics(z1)
 
-            #if self.mode == 'train' or self.mode == 'update_catopic':
             if self.training:
                 y_hat_logis = self.xy_classifier(z1)
                 y_hat = torch.softmax(y_hat_logis, dim=-1)
                 if self.mode == 'train':
-                    #true_y_ids = self.y2onehot(true_y)
                     classifier_loss += self.class_criterion(y_hat_logis, true_y_ids)
             else:
                 y_hat_logis = self.xy_classifier(mu_z1)
@@ -241,10 +236,15 @@ class CANTM(nn.Module):
         elbo_z1 = kldz1 + rec_loss_z1
         elbo_z2 = kldz2 + rec_loss_z2 + log_y_hat_rec_loss
 
+
+
         total_loss = elbo_z1.sum() + elbo_z2.sum() + class_topic_rec_loss.sum() + classifier_loss*self.banlance_lambda*self.classification_loss_lambda
         
-        if self.training and self.mode == 'update_catopic':
+        if (self.training and self.mode == 'update_catopic'):
             total_loss = elbo_z2.sum()
+        elif (self.training and self.mode == 'topic_pretrain'):
+            total_loss = elbo_z1.sum()
+
 
         y = {
             'loss': total_loss,
